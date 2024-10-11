@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "kong-openid-webserver",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

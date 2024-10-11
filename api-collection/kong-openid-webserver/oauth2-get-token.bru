@@ -1,0 +1,32 @@
+meta {
+  name: oauth2-get-token
+  type: http
+  seq: 4
+}
+
+post {
+  url: https://127.0.0.1:14444/oauth2/token
+  body: formUrlEncoded
+  auth: basic
+}
+
+auth:basic {
+  username: {{CLIENT_ID}}
+  password: {{CLIENT_SECRET}}
+}
+
+body:text {
+  grant_type=client_credentials&scope=read&client_id={{CLIENT_ID}}&client_secret={{CLIENT_SECRET}}
+}
+
+body:form-urlencoded {
+  grant_type: client_credentials
+}
+
+body:multipart-form {
+  grant_type: client_credentials
+}
+
+script:post-response {
+  bru.setEnvVar("ACCESS_TOKEN",res.getBody().access_token)
+}

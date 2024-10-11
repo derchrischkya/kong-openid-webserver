@@ -1,0 +1,89 @@
+networks:
+  backend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/32
+          gateway: 10.5.0.1
+services:
+  postgres:
+    networks:
+      backend:
+        ipv4_address: 10.5.0.2
+    image: postgres:13
+    platform: linux/amd64
+    ports:
+      - "15432:5432"
+      - "15672:15672"
+    environment:
+      - POSTGRES_USER=libary
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=libary
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "libary"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  migration-openid:
+    networks:
+      backend:
+        ipv4_address: 10.5.0.3
+    image: oryd/hydra:v1.10.6
+    platform: linux/amd64
+    environment:
+      - SECRETS_SYSTEM=ApZWykuShpUlUgu4M26DmccL5jgZVAXxIkh10Phns7b655AyI2
+      - DSN=postgres://libary:secret@10.5.0.2:5432/libary?sslmode=disable
+    command:
+    # Check if the database is already migrated
+      - "migrate"
+      - "sql"
+      - "--yes"
+      - "-e"
+    depends_on:
+      postgres:
+        condition: service_healthy
+  # Ora Hydra
+  openid:
+    networks:
+      backend:
+        ipv4_address: 10.5.0.3
+    image: oryd/hydra:v1.10.6
+    platform: linux/amd64
+    ports:
+      - "14444:4444"
+      - "14445:4445"
+    environment:
+      - SECRETS_SYSTEM=ApZWykuShpUlUgu4M26DmccL5jgZVAXxIkh10Phns7b655AyI2
+      - DSN=postgres://libary:secret@10.5.0.2:5432/libary?sslmode=disable
+      - URLS_SELF_ISSUER=https://localhost:4444/
+      - URLS_CONSENT=http://localhost:9020/consent
+      - URLS_LOGIN=http://localhost:9020/login
+      - URLS_LOGOUT=http://localhost:9020/logout
+    depends_on:
+      migration-openid:
+        condition: service_completed_successfully
+  webserver:
+    networks:
+      backend:
+        ipv4_address: 10.5.0.4
+    build: src/webserver
+  kong:
+    networks:
+      backend:
+        ipv4_address: 10.5.0.5
+    build: src/kong
+    platform: linux/amd64
+    ports:
+      - "8000:8000"
+    environment:
+      - KONG_DATABASE=off
+      - KONG_DECLARATIVE_CONFIG=/etc/kong/kong.yml
+      - KONG_PROXY_ACCESS_LOG=/dev/stdout
+      - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+      - KONG_PROXY_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_ERROR_LOG=/dev/stderr
+      - KONG_PLUGINS=bundled,token-introspection
+    volumes:
+      - ./src/kong/config.yaml:/etc/kong/kong.yml
